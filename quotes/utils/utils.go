@@ -9,6 +9,9 @@ import (
 )
 
 func GetExchangeCode(code string) string {
+	if !('0' <= code[0] && code[0] <= '9') {
+		return code
+	}
 	if code[0] == '6' {
 		return "sh" + code
 	}
