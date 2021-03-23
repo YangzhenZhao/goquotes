@@ -18,6 +18,12 @@ func GetExchangeCode(code string) string {
 	return "sz" + code
 }
 
+func ToExchangeCodes(codes []string) {
+	for i := range codes {
+		codes[i] = GetExchangeCode(codes[i])
+	}
+}
+
 func UTF8ToGBK(src []byte) ([]byte, error) {
 	dst, err := ioutil.ReadAll(
 		transform.NewReader(bytes.NewReader(src), simplifiedchinese.GBK.NewDecoder()),

@@ -2,11 +2,13 @@ package stock
 
 import (
 	"errors"
+	"fmt"
 	"io"
-	"log"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/YangzhenZhao/goquotes/quotes/consts"
@@ -30,24 +32,64 @@ type SinaTick struct {
 	bid_vol       [5]uint64
 }
 
+func (tick *SinaTick) Print() {
+	fmt.Println("time:", &tick.time)
+	t := reflect.TypeOf(tick)
+	v := reflect.ValueOf(tick)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+		v = v.Elem()
+	}
+	for i := 1; i < t.NumField(); i++ {
+		f := t.Field(i)
+		fmt.Printf("%s: ", f.Name)
+		fmt.Printf("%v\n", v.Field(i))
+	}
+}
+
 type SinaQuote struct {
 }
 
+func (quote *SinaQuote) TickMap(codes []string) map[string]*SinaTick {
+	var waitGroup sync.WaitGroup
+
+	ticks := []*SinaTick{}
+
+	codesNum := len(codes)
+	i := 0
+	for {
+		waitGroup.Add(1)
+		if (i+1)*consts.REQ_CODES_NUM_MAX >= codesNum {
+			go func() {
+				defer waitGroup.Done()
+				ticksTmp := smallTicks(codes[i*consts.REQ_CODES_NUM_MAX:])
+				ticks = append(ticks, ticksTmp...)
+			}()
+			break
+		}
+		go func() {
+			defer waitGroup.Done()
+			ticksTmp := smallTicks(codes[i*consts.REQ_CODES_NUM_MAX : (i+1)*consts.REQ_CODES_NUM_MAX])
+			ticks = append(ticks, ticksTmp...)
+		}()
+		i += 1
+	}
+
+	waitGroup.Wait()
+
+	res := make(map[string]*SinaTick)
+	for _, tick := range ticks {
+		res[tick.code] = tick
+	}
+	return res
+}
+
 func (quote *SinaQuote) Tick(code string) (*SinaTick, error) {
-	res, err := http.Get(consts.SINA_BASE_URL + utils.GetExchangeCode(code))
-	if err != nil {
-		log.Fatal(err)
+	res := smallTicks([]string{code})
+	if len(res) == 0 {
+		return nil, errors.New("invalid code")
 	}
-	byteArr, err := io.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		log.Fatal(err)
-	}
-	byteArr, err = utils.UTF8ToGBK(byteArr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return parse_out_tick(byteArr)
+	return res[0], nil
 }
 
 func (quote *SinaQuote) Price(code string) (float64, error) {
@@ -58,8 +100,7 @@ func (quote *SinaQuote) Price(code string) (float64, error) {
 	return res.current_price, err
 }
 
-func parse_out_tick(byteArr []byte) (*SinaTick, error) {
-	msg := string(byteArr)
+func parse_out_tick(msg string) (*SinaTick, error) {
 	fieldArr := strings.Split(msg, ",")
 	if len(fieldArr) < 32 {
 		return nil, errors.New("invalid code")
@@ -138,4 +179,34 @@ func parse_out_tick(byteArr []byte) (*SinaTick, error) {
 		ask_vol,
 		bid_vol,
 	}, nil
+}
+
+func smallTicks(codes []string) []*SinaTick {
+	res := []*SinaTick{}
+	contents := fetchTickContents(codes)
+	for _, content := range strings.Split(contents, "\n") {
+		tick, err := parse_out_tick(content)
+		if err == nil {
+			res = append(res, tick)
+		}
+	}
+	return res
+}
+
+func fetchTickContents(codes []string) string {
+	utils.ToExchangeCodes(codes)
+	res, err := http.Get(consts.SINA_BASE_URL + strings.Join(codes, ","))
+	if err != nil {
+		return ""
+	}
+	byteArr, err := io.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		return ""
+	}
+	byteArr, err = utils.UTF8ToGBK(byteArr)
+	if err != nil {
+		return ""
+	}
+	return string(byteArr)
 }
