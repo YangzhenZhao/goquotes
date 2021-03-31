@@ -16,24 +16,24 @@ import (
 )
 
 type SinaTick struct {
-	time          time.Time
-	code          string
-	name          string
-	current_price float64
-	pre_close     float64
-	open          float64
-	high          float64
-	low           float64
-	total_amount  float64
-	total_vol     float64
-	ask_price     [5]float64
-	bid_price     [5]float64
-	ask_vol       [5]uint64
-	bid_vol       [5]uint64
+	Time         time.Time
+	Code         string
+	Name         string
+	CurrentPrice float64
+	PreClose     float64
+	Open         float64
+	High         float64
+	Low          float64
+	TotalAmount  float64
+	TotalVol     float64
+	AskPrice     [5]float64
+	BidPrice     [5]float64
+	AskVol       [5]uint64
+	BidVol       [5]uint64
 }
 
 func (tick *SinaTick) Print() {
-	fmt.Println("time:", &tick.time)
+	fmt.Println("Time:", &tick.Time)
 	t := reflect.TypeOf(tick)
 	v := reflect.ValueOf(tick)
 	if t.Kind() == reflect.Ptr {
@@ -79,7 +79,7 @@ func (quote *SinaQuote) TickMap(codes []string) map[string]*SinaTick {
 
 	res := make(map[string]*SinaTick)
 	for _, tick := range ticks {
-		res[tick.code] = tick
+		res[tick.Code] = tick
 	}
 	return res
 }
@@ -97,7 +97,7 @@ func (quote *SinaQuote) Price(code string) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return res.current_price, err
+	return res.CurrentPrice, err
 }
 
 func parse_out_tick(msg string) (*SinaTick, error) {
